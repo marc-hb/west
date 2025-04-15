@@ -900,7 +900,7 @@ class Project:
     #
     # Git helpers
     #
-
+    # prepare_git_cmd
     def git(self, cmd: Union[str, list[str]],
             extra_args: Iterable[str] = (),
             capture_stdout: bool = False,
@@ -945,6 +945,9 @@ class Project:
         args = ['git'] + cmd_list + extra_args
         cmd_str = util.quote_sh_list(args)
 
+# sync
+# def git (
+
         _logger.debug(f"running '{cmd_str}' in {cwd}")
         popen = subprocess.Popen(
             args, cwd=cwd,
@@ -966,6 +969,10 @@ class Project:
         else:
             return subprocess.CompletedProcess(popen.args, popen.returncode,
                                                stdout, stderr)
+
+# def async_git
+     # prepare_git_cmd
+     
 
     def sha(self, rev: str, cwd: Optional[PathType] = None) -> str:
         '''Get the SHA for a project revision.

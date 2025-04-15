@@ -1083,11 +1083,11 @@ class Update(_ProjectCommand):
         self.updated = set()
 
         self.manifest = Manifest.from_file(
-            importer=self.update_importer,
+            importer=self.update_importer, 
             import_flags=ImportFlag.FORCE_PROJECTS)
 
         failed = []
-        for project in self.manifest.projects:
+        for project in self.manifest.projects: # in as_completed()
             if (isinstance(project, ManifestProject) or
                     project.name in self.updated):
                 continue
@@ -1095,7 +1095,7 @@ class Update(_ProjectCommand):
                 if not self.project_is_active(project):
                     self.dbg(f'{project.name}: skipping inactive project')
                     continue
-                self.update(project)
+                self.update(project) # create async task
                 self.updated.add(project.name)
             except subprocess.CalledProcessError:
                 failed.append(project)
@@ -1114,7 +1114,7 @@ class Update(_ProjectCommand):
             # to specify in this case.
             assert not project.groups
 
-            self.update(project)
+            self.update(project) # still need synchronous version here? Or just call asyncio.run()...
         self.updated.add(project.name)
 
         try:
@@ -1138,7 +1138,7 @@ class Update(_ProjectCommand):
                      f'file at URL {project.url}\n'
                      '          - remove the "import:"' + suggest_vvv)
 
-    def update_some(self):
+    def update_some(self): 
         # The 'west update PROJECT [...]' style invocation is only
         # implemented for projects defined within the manifest
         # repository.
@@ -1163,7 +1163,7 @@ class Update(_ProjectCommand):
             if isinstance(project, ManifestProject):
                 continue
             try:
-                self.update(project)
+                self.update(project) 
             except subprocess.CalledProcessError:
                 failed.append(project)
         self._handle_failed(self.args, failed)
@@ -1268,7 +1268,7 @@ class Update(_ProjectCommand):
                             '--init', submodules_update_strategy,
                             '--recursive'] + ref + [submodule.path])
 
-    def update(self, project):
+    def update(self, project): # async + sync, both needed? No.
         if self.args.stats:
             stats = dict()
             update_start = perf_counter()
@@ -1283,7 +1283,7 @@ class Update(_ProjectCommand):
 
         # Point refs/heads/manifest-rev at project.revision,
         # fetching it from the remote if necessary.
-        self.set_new_manifest_rev(project, stats, take_stats)
+        self.set_new_manifest_rev(project, stats, take_stats) # await "hidden" git fetch here
 
         # Clean up refs/west/*. At some point, we should only do this
         # if we've fetched, but we're leaving it here to clean up
@@ -1296,6 +1296,18 @@ class Update(_ProjectCommand):
 
         # Convert manifest-rev to a SHA.
         sha = self.manifest_rev_sha(project, stats, take_stats)
+
+        # code above == new function fetch_manifest_rev(). async in the future.
+        # Below: local_update(). Synchronous, we don't really need to parallelize git rebase conflicts.
+        # submodules :-(
+        # imports :-(
+        # Atomic! Find GH issue. update + rebase, etc.
+        # Transfer: sha, stats.
+
+        ### TODO: split --fetch-only here. Find github issue number
+        ### This can be run synchronously.
+        ### stats MUST be split in two subsets because they won't run consecutively.
+        ### New, second LOCAL_TOTAL.
 
         # Based on the new manifest-rev SHA, HEAD, and the --rebase
         # and --keep-descendants options, decide what we need to do
@@ -1480,12 +1492,12 @@ class Update(_ProjectCommand):
 
         return None
 
-    def set_new_manifest_rev(self, project, stats, take_stats):
+    def set_new_manifest_rev(self, project, stats, take_stats): 
         # update() helper. Make sure project's manifest-rev is set to
         # the latest value it should be.
 
         if self.fs == 'always' or _rev_type(project) not in ('tag', 'commit'):
-            self.fetch(project, stats, take_stats)
+            self.fetch(project, stats, take_stats) 
         else:
             self.dbg('skipping unnecessary fetch')
             if take_stats:
@@ -1494,7 +1506,7 @@ class Update(_ProjectCommand):
             if take_stats:
                 stats['set manifest-rev'] = perf_counter() - start
 
-    def fetch(self, project, stats, take_stats):
+    def fetch(self, project, stats, take_stats): # need async_fetch
         # Fetches rev (or project.revision) from project.url in a way that
         # guarantees any branch, tag, or SHA (that's reachable from a
         # branch or a tag) available on project.url is part of what got
@@ -1543,7 +1555,7 @@ class Update(_ProjectCommand):
         # -f is needed to avoid errors in case multiple remotes are
         # present, at least one of which contains refs that can't be
         # fast-forwarded to our local ref space.
-        project.git(['fetch', '-f'] + tags + clone_depth +
+        project.git(['fetch', '-f'] + tags + clone_depth + # await async_git subprocess
                     self.args.fetch_opt +
                     ['--', project.url, refspec])
 
