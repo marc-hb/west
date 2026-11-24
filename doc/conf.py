@@ -24,6 +24,18 @@ author = 'The Zephyr Project Contributors'
 sys.path.insert(0, str(WEST_BASE / 'src'))
 version = importlib.metadata.version("west")
 
+# We can find and import a west. Now, let's check we don't silently fall back on importing
+# something outside because the local build is missing.
+west_files = importlib.metadata.files("west")
+if west_files:
+    west_file0 = west_files[0].locate().resolve()
+    # When building docs with uv, expect something like WEST_BASE/.venv/lib/python3.N/site-packages/
+    assert WEST_BASE in west_file0.parents
+# Else when west_files is empty, it's not a "real" package, so a successful import most
+# likely relies on SRC / 'west.egg-info' and others => they must be inside WEST_BASE and we
+# are good.
+
+
 extensions = [
     "sphinx_rtd_theme",
     "sphinx_tabs.tabs",
